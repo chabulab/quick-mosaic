@@ -18,6 +18,7 @@ export function MosaicCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const cellsRef = useRef<MosaicCell[]>([]);
+  const imageDataRef = useRef<ImageData | null>(null);
   const rafRef = useRef<number>(0);
 
   const handleFile = useCallback(
@@ -85,6 +86,7 @@ export function MosaicCanvas({
     const offCtx = offscreen.getContext("2d")!;
     offCtx.drawImage(sourceImage, 0, 0);
     const imageData = offCtx.getImageData(0, 0, w, h);
+    imageDataRef.current = imageData;
 
     const gridCells = generateGrid(w, h, settings);
     cellsRef.current = computeMosaicCells(gridCells, imageData, w, h, settings);
@@ -104,7 +106,8 @@ export function MosaicCanvas({
           canvas.width,
           canvas.height,
           w,
-          h
+          h,
+          imageDataRef.current ?? undefined
         );
       });
     });
@@ -114,7 +117,17 @@ export function MosaicCanvas({
     const rect = container.getBoundingClientRect();
     canvas.width = rect.width;
     canvas.height = rect.height;
-    renderPreview(ctx, sourceImage, cellsRef.current, settings, canvas.width, canvas.height, w, h);
+    renderPreview(
+      ctx,
+      sourceImage,
+      cellsRef.current,
+      settings,
+      canvas.width,
+      canvas.height,
+      w,
+      h,
+      imageData
+    );
 
     return () => {
       resizeObserver.disconnect();

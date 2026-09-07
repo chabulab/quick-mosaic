@@ -22,6 +22,7 @@ export interface MosaicCell {
   points: [number, number][];
   centroid: [number, number];
   color: [number, number, number, number];
+  bbox: { minX: number; minY: number; maxX: number; maxY: number };
 }
 
 export const DEFAULT_SETTINGS: MosaicSettings = {

@@ -16,7 +16,10 @@ function generateHexPoints(
   const points: [number, number][] = [];
   for (let i = 0; i < 6; i++) {
     const angle = (Math.PI / 3) * i - Math.PI / 6;
-    points.push([cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)]);
+    points.push([
+      cx + radius * Math.cos(angle),
+      cy + radius * Math.sin(angle),
+    ]);
   }
   return points;
 }
@@ -76,24 +79,6 @@ function pointInPolygon(
   return inside;
 }
 
-function sampleColor(
-  imageData: ImageData,
-  x: number,
-  y: number,
-  w: number,
-  h: number
-): [number, number, number, number] {
-  const px = Math.max(0, Math.min(w - 1, Math.round(x)));
-  const py = Math.max(0, Math.min(h - 1, Math.round(y)));
-  const idx = (py * w + px) * 4;
-  return [
-    imageData.data[idx],
-    imageData.data[idx + 1],
-    imageData.data[idx + 2],
-    imageData.data[idx + 3],
-  ];
-}
-
 export function generateGrid(
   width: number,
   height: number,
@@ -136,34 +121,66 @@ function generateVoronoiGrid(
     }
   }
 
+  // Spatial hash for fast neighbor lookup
+  const cellSize = size * 3;
+  const grid = new Map<string, number[]>();
+  for (let i = 0; i < points.length; i++) {
+    const gx = Math.floor(points[i][0] / cellSize);
+    const gy = Math.floor(points[i][1] / cellSize);
+    const key = `${gx},${gy}`;
+    const arr = grid.get(key);
+    if (arr) arr.push(i);
+    else grid.set(key, [i]);
+  }
+
   const cells: [number, number][][] = [];
-  for (const point of points) {
-    const cell = voronoiCell(point, points, w, h);
+  for (let i = 0; i < points.length; i++) {
+    const center = points[i];
+    const neighbors = getNeighborIndices(center, points, cellSize, grid, 5);
+    const cell = voronoiCell(center, points, neighbors, w, h);
     if (cell.length >= 3) cells.push(cell);
   }
   return cells;
 }
 
+function getNeighborIndices(
+  center: [number, number],
+  _points: [number, number][],
+  cellSize: number,
+  grid: Map<string, number[]>,
+  radius: number
+): number[] {
+  const gx = Math.floor(center[0] / cellSize);
+  const gy = Math.floor(center[1] / cellSize);
+  const result: number[] = [];
+
+  for (let dx = -radius; dx <= radius; dx++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      const key = `${gx + dx},${gy + dy}`;
+      const cell = grid.get(key);
+      if (cell) result.push(...cell);
+    }
+  }
+  return result;
+}
+
 function voronoiCell(
   center: [number, number],
   allPoints: [number, number][],
+  neighborIndices: number[],
   w: number,
   h: number
 ): [number, number][] {
-  const clipLeft = 0;
-  const clipTop = 0;
-  const clipRight = w;
-  const clipBottom = h;
-
   let polygon: [number, number][] = [
-    [clipLeft, clipTop],
-    [clipRight, clipTop],
-    [clipRight, clipBottom],
-    [clipLeft, clipBottom],
+    [0, 0],
+    [w, 0],
+    [w, h],
+    [0, h],
   ];
 
-  for (const other of allPoints) {
-    if (other === center) continue;
+  for (const idx of neighborIndices) {
+    const other = allPoints[idx];
+    if (other[0] === center[0] && other[1] === center[1]) continue;
     const mx = (center[0] + other[0]) / 2;
     const my = (center[1] + other[1]) / 2;
     const dx = other[0] - center[0];
@@ -187,7 +204,6 @@ function clipPolygon(
 ): [number, number][] {
   if (polygon.length === 0) return [];
   const result: [number, number][] = [];
-
   const dist = (x: number, y: number) => nx * (x - px) + ny * (y - py);
 
   for (let i = 0; i < polygon.length; i++) {
@@ -213,7 +229,6 @@ function clipPolygon(
       ]);
     }
   }
-
   return result;
 }
 
@@ -296,7 +311,7 @@ export function computeMosaicCells(
   h: number,
   settings: MosaicSettings
 ): MosaicCell[] {
-  const { refraction, opacity } = settings.glass;
+  const { refraction } = settings.glass;
   const result: MosaicCell[] = [];
 
   for (const points of cells) {
@@ -309,19 +324,64 @@ export function computeMosaicCells(
     cx /= points.length;
     cy /= points.length;
 
+    // Refraction offset: shift sample point away from center of image
     const dirX = cx - w / 2;
     const dirY = cy - h / 2;
     const len = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
     const offsetX = (dirX / len) * refraction;
     const offsetY = (dirY / len) * refraction;
 
-    const sampledColor = sampleColor(imageData, cx + offsetX, cy + offsetY, w, h);
-    sampledColor[3] = (opacity / 100) * 255;
+    // Compute surface normal for specular highlight
+    // Use the gradient of distance to nearest edge
+    const bbox = getBoundingBox(points);
+    const sampleX = Math.max(0, Math.min(w - 1, Math.round(cx + offsetX)));
+    const sampleY = Math.max(0, Math.min(h - 1, Math.round(cy + offsetY)));
 
-    result.push({ points, centroid: [cx, cy], color: sampledColor });
+    const color = sampleColor(imageData, sampleX, sampleY, w, h);
+
+    result.push({
+      points,
+      centroid: [cx, cy],
+      color,
+      bbox,
+    });
   }
 
   return result;
+}
+
+function getBoundingBox(
+  points: [number, number][]
+): { minX: number; minY: number; maxX: number; maxY: number } {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const [x, y] of points) {
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function sampleColor(
+  imageData: ImageData,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+): [number, number, number, number] {
+  const px = Math.max(0, Math.min(w - 1, Math.round(x)));
+  const py = Math.max(0, Math.min(h - 1, Math.round(y)));
+  const idx = (py * w + px) * 4;
+  return [
+    imageData.data[idx],
+    imageData.data[idx + 1],
+    imageData.data[idx + 2],
+    imageData.data[idx + 3],
+  ];
 }
 
 export { pointInPolygon };
