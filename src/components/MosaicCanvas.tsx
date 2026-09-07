@@ -37,6 +37,7 @@ export function MosaicCanvas({
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
+      e.stopPropagation();
       setIsDragging(false);
       const file = e.dataTransfer.files[0];
       if (file) handleFile(file);
@@ -46,10 +47,13 @@ export function MosaicCanvas({
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(true);
   }, []);
 
-  const handleDragLeave = useCallback(() => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setIsDragging(false);
   }, []);
 
@@ -87,6 +91,7 @@ export function MosaicCanvas({
 
     const resizeObserver = new ResizeObserver(() => {
       const rect = container.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
       canvas.width = rect.width;
       canvas.height = rect.height;
       cancelAnimationFrame(rafRef.current);
@@ -106,8 +111,9 @@ export function MosaicCanvas({
 
     resizeObserver.observe(container);
 
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
+    const rect = container.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
     renderPreview(ctx, sourceImage, cellsRef.current, settings, canvas.width, canvas.height, w, h);
 
     return () => {
@@ -119,7 +125,7 @@ export function MosaicCanvas({
   return (
     <div
       ref={containerRef}
-      className={`relative flex-1 overflow-hidden bg-neutral-950 transition-colors ${
+      className={`relative min-h-0 flex-1 overflow-hidden bg-neutral-950 transition-colors ${
         isDragging ? "ring-2 ring-blue-500 ring-inset" : ""
       }`}
       onDrop={handleDrop}
@@ -130,12 +136,12 @@ export function MosaicCanvas({
 
       {!sourceImage && (
         <div
-          className="absolute inset-0 flex flex-col items-center justify-center gap-4 cursor-pointer select-none"
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 cursor-pointer select-none"
           onClick={handleClick}
         >
-          <div className="rounded-2xl border-2 border-dashed border-neutral-600 p-16 text-center transition-colors hover:border-neutral-400">
+          <div className="rounded-2xl border-2 border-dashed border-neutral-500 bg-neutral-900/80 p-12 text-center transition-colors hover:border-neutral-300 hover:bg-neutral-800/80">
             <svg
-              className="mx-auto mb-4 h-12 w-12 text-neutral-500"
+              className="mx-auto mb-4 h-16 w-16 text-neutral-400"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -147,10 +153,10 @@ export function MosaicCanvas({
                 d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
               />
             </svg>
-            <p className="text-lg font-medium text-neutral-300">
+            <p className="text-xl font-medium text-neutral-200">
               Drop an image here
             </p>
-            <p className="mt-1 text-sm text-neutral-500">
+            <p className="mt-2 text-sm text-neutral-400">
               or click to browse
             </p>
           </div>
