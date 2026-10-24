@@ -1,7 +1,5 @@
 import type { MosaicSettings, GridShape } from "@/lib/mosaic/types";
 import { PRESETS } from "@/lib/mosaic/presets";
-import { exportMosaic } from "@/lib/mosaic/renderer";
-import { generateGrid, computeMosaicCells } from "@/lib/mosaic/grid";
 import {
   Sidebar,
   SidebarContent,
@@ -26,13 +24,15 @@ import { Button } from "@/components/ui/button";
 interface SidebarPanelProps {
   settings: MosaicSettings;
   onSettingsChange: (settings: MosaicSettings) => void;
-  sourceImage: HTMLImageElement | null;
+  hasImage: boolean;
+  onExport: () => void;
 }
 
 export function SidebarPanel({
   settings,
   onSettingsChange,
-  sourceImage,
+  hasImage,
+  onExport,
 }: SidebarPanelProps) {
   const update = (patch: Partial<MosaicSettings>) => {
     onSettingsChange({ ...settings, ...patch });
@@ -42,13 +42,7 @@ export function SidebarPanel({
     Array.isArray(v) ? v[0] : v;
 
   const handleExport = () => {
-    if (!sourceImage) return;
-    const cells = generateCellsForExport(sourceImage, settings);
-    const canvas = exportMosaic(sourceImage, cells, settings);
-    const link = document.createElement("a");
-    link.download = "mosaic.png";
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    onExport();
   };
 
   const applyPreset = (presetName: string | null) => {
@@ -299,7 +293,7 @@ export function SidebarPanel({
         <div className="pb-4">
           <Button
             onClick={handleExport}
-            disabled={!sourceImage}
+            disabled={!hasImage}
             className="w-full"
           >
             <svg
@@ -321,20 +315,4 @@ export function SidebarPanel({
       </SidebarContent>
     </Sidebar>
   );
-}
-
-function generateCellsForExport(
-  image: HTMLImageElement,
-  settings: MosaicSettings
-) {
-  const w = image.naturalWidth;
-  const h = image.naturalHeight;
-  const offscreen = document.createElement("canvas");
-  offscreen.width = w;
-  offscreen.height = h;
-  const ctx = offscreen.getContext("2d")!;
-  ctx.drawImage(image, 0, 0);
-  const imageData = ctx.getImageData(0, 0, w, h);
-  const gridCells = generateGrid(w, h, settings);
-  return computeMosaicCells(gridCells, imageData, w, h, settings);
 }
