@@ -112,8 +112,7 @@ the presets or the export path.
   a maintained app around it.
 - `convertlab` handles browser image decode and PNG/JPG/WebP encode, but its
   writers and quality controls are a different approach.
-- `crack-bloom` and `jelly-island` are also Vite + canvas/WebGL experiments, with
-  no shared code.
+- `jelly-island` is also a Vite + canvas/WebGL experiment, with no shared code.
 
 ## Known gaps
 
